@@ -17,6 +17,7 @@ from twitterclient import TwitterClient
 DEFAULT_TWEET_LIMIT = 3
 DEFAULT_POLL_MIN_SECONDS = 30
 DEFAULT_POLL_MAX_SECONDS = 90
+AUTHORIZED_USER_ID = 305168559804514304
 
 
 def parse_int(value, default=None):
@@ -26,6 +27,10 @@ def parse_int(value, default=None):
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def has_manage_guild_or_authorized_user(interaction: discord.Interaction):
+    return interaction.user.id == AUTHORIZED_USER_ID or interaction.user.guild_permissions.manage_guild
 
 
 load_dotenv()
@@ -171,7 +176,7 @@ settings_group = app_commands.Group(name="settings", description="Manage scraper
 
 
 @settings_group.command(name="channel", description="Set the channel where tweets are sent")
-@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.check(has_manage_guild_or_authorized_user)
 async def settings_channel(interaction: discord.Interaction, channel: discord.TextChannel):
     bot_config["channel_id"] = channel.id
     await save_bot_config(interaction.guild_id, bot_config)
@@ -179,7 +184,7 @@ async def settings_channel(interaction: discord.Interaction, channel: discord.Te
 
 
 @settings_group.command(name="user", description="Set the Identity V Twitter account to track")
-@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.check(has_manage_guild_or_authorized_user)
 async def settings_user(interaction: discord.Interaction, username: str):
     cleaned_username = username.strip().lstrip("@")
     bot_config["tracked_username"] = cleaned_username
@@ -188,7 +193,7 @@ async def settings_user(interaction: discord.Interaction, username: str):
 
 
 @settings_group.command(name="silent", description="Send tweets without push notifications")
-@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.check(has_manage_guild_or_authorized_user)
 async def settings_silent(interaction: discord.Interaction, enabled: bool):
     bot_config["silent"] = bool(enabled)
     await save_bot_config(interaction.guild_id, bot_config)
@@ -197,7 +202,7 @@ async def settings_silent(interaction: discord.Interaction, enabled: bool):
 
 
 @settings_group.command(name="ignore_replies", description="Ignore reply tweets when posting")
-@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.check(has_manage_guild_or_authorized_user)
 async def settings_ignore_replies(interaction: discord.Interaction, enabled: bool = True):
     bot_config["ignore_replies"] = bool(enabled)
     await save_bot_config(interaction.guild_id, bot_config)
@@ -205,7 +210,7 @@ async def settings_ignore_replies(interaction: discord.Interaction, enabled: boo
     await interaction.response.send_message(f"Ignore replies {state}.", ephemeral=True)
 
 @settings_group.command(name="view", description="View current bot settings")
-@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.check(has_manage_guild_or_authorized_user)
 async def settings_view(interaction: discord.Interaction):
     channel_id = get_effective_channel_id()
     channel_mention = f"<#{channel_id}>" if channel_id else "Not set"
@@ -234,7 +239,7 @@ keywords_group = app_commands.Group(name="keywords", description="Manage tweet k
 
 
 @keywords_group.command(name="add", description="Only post tweets containing this word")
-@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.check(has_manage_guild_or_authorized_user)
 async def keywords_add(interaction: discord.Interaction, word: str):
     keyword = word.strip().lower()
     if not keyword:
@@ -249,7 +254,7 @@ async def keywords_add(interaction: discord.Interaction, word: str):
 
 
 @keywords_group.command(name="remove", description="Remove a keyword from the filter list")
-@app_commands.checks.has_permissions(manage_guild=True)
+@app_commands.check(has_manage_guild_or_authorized_user)
 async def keywords_remove(interaction: discord.Interaction, word: str):
     keyword = word.strip().lower()
     if not keyword:
@@ -279,7 +284,7 @@ async def sync_app_commands():
 
 @bot.command(name="sync")
 @commands.guild_only()
-@commands.has_permissions(manage_guild=True)
+@commands.check(lambda ctx: ctx.author.id == AUTHORIZED_USER_ID or ctx.author.guild_permissions.manage_guild)
 async def sync_prefix_command(ctx):
     synced_commands = await sync_app_commands()
     await ctx.reply(f"Synced {len(synced_commands)} global application commands.")

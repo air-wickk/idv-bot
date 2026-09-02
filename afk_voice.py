@@ -7,6 +7,13 @@ from discord import app_commands
 from discord.ext import tasks
 
 
+AUTHORIZED_USER_ID = 305168559804514304
+
+
+def has_manage_guild_or_authorized_user(interaction: discord.Interaction):
+    return interaction.user.id == AUTHORIZED_USER_ID or interaction.user.guild_permissions.manage_guild
+
+
 class AfkVoiceManager:
     def __init__(self, bot, get_settings, save_settings):
         self.bot = bot
@@ -127,7 +134,7 @@ class AfkVoiceManager:
         afk_group = app_commands.Group(name="afk", description="Manage AFK voice playback")
 
         @afk_group.command(name="channel", description="Set the AFK voice channel")
-        @app_commands.checks.has_permissions(manage_guild=True)
+        @app_commands.check(has_manage_guild_or_authorized_user)
         async def afk_channel(interaction: discord.Interaction, channel: discord.VoiceChannel):
             settings = self._config()
             settings["afk_voice_channel_id"] = channel.id
@@ -140,7 +147,7 @@ class AfkVoiceManager:
             await self.refresh_guild(interaction.guild, restart=True)
 
         @afk_group.command(name="audio", description="Set the audio source used in AFK voice")
-        @app_commands.checks.has_permissions(manage_guild=True)
+        @app_commands.check(has_manage_guild_or_authorized_user)
         async def afk_audio(interaction: discord.Interaction, source: str):
             cleaned_source = source.strip()
             if not cleaned_source:
@@ -157,7 +164,7 @@ class AfkVoiceManager:
             await self.refresh_guild(interaction.guild, restart=True)
 
         @afk_group.command(name="enable", description="Enable AFK voice playback")
-        @app_commands.checks.has_permissions(manage_guild=True)
+        @app_commands.check(has_manage_guild_or_authorized_user)
         async def afk_enable(interaction: discord.Interaction):
             settings = self._config()
             settings["afk_enabled"] = True
@@ -166,7 +173,7 @@ class AfkVoiceManager:
             await self.refresh_guild(interaction.guild, restart=True)
 
         @afk_group.command(name="disable", description="Disable AFK voice playback")
-        @app_commands.checks.has_permissions(manage_guild=True)
+        @app_commands.check(has_manage_guild_or_authorized_user)
         async def afk_disable(interaction: discord.Interaction):
             settings = self._config()
             settings["afk_enabled"] = False
@@ -175,7 +182,7 @@ class AfkVoiceManager:
             await self.refresh_guild(interaction.guild, restart=True)
 
         @afk_group.command(name="view", description="View current AFK voice settings")
-        @app_commands.checks.has_permissions(manage_guild=True)
+        @app_commands.check(has_manage_guild_or_authorized_user)
         async def afk_view(interaction: discord.Interaction):
             settings = self._config()
             channel_id = settings.get("afk_voice_channel_id")
