@@ -1,5 +1,5 @@
 discord.py==2.3.2
 python-dotenv==1.0.1
 Flask==3.0.0
-tweety-ns==2.4.1
+tweety==0.1.6
 beautifulsoup4==4.12.0
