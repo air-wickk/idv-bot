@@ -2,7 +2,11 @@ import bs4
 import re
 
 from tweety.http import MIGRATION_REGEX, Request
-from tweety.transaction import find_on_demand_file
+
+try:
+    from tweety.transaction import find_on_demand_file
+except ImportError:
+    find_on_demand_file = None
 
 
 def patch_tweety_home_page_fallback():
@@ -59,7 +63,7 @@ def patch_tweety_home_page_fallback():
                 )
                 home_page = bs4.BeautifulSoup(response.content, "lxml")
 
-            if home_page and not find_on_demand_file(str(home_page)):
+            if home_page and (find_on_demand_file is None or not find_on_demand_file(str(home_page))):
                 response = await self._session.request(
                     method="GET",
                     url="https://x.com/home",
