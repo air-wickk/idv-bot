@@ -1,3 +1,4 @@
+import asyncio
 import os
 from dotenv import load_dotenv
 from tweety import TwitterAsync
@@ -68,5 +69,19 @@ class TwitterClient:
             user_tweets = await self.client.get_tweets(username, pages=1)
             return user_tweets.tweets[:limit]
         except Exception as e:
-            print(f"Error fetching user tweets: {e}")
-            return []
+            if "239" not in str(e) and "Bad guest token" not in str(e):
+                print(f"Error fetching tweets: {e}")
+                return []
+
+            print("Guest token rejected; recreating Tweety client and retrying once.")
+            self.client = TwitterAsync(self.session_dir)
+            self.logged_in = False
+            await asyncio.sleep(2)
+
+            await self.login()
+            try:
+                user_tweets = await self.client.get_tweets(username, pages=1)
+                return user_tweets.tweets[:limit]
+            except Exception as retry_error:
+                print(f"Retry failed while fetching tweets: {retry_error}")
+                return []
