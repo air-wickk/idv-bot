@@ -333,79 +333,133 @@ async def check_tweets():
     ignore_replies = bool(bot_config.get("ignore_replies", True))
 
     if not channel_id:
-        logging.warning("No send channel configured yet. Set DISCORD_CHANNEL_ID or use /settings channel.")
+        logging.warning(
+            "No send channel configured yet. "
+            "Set DISCORD_CHANNEL_ID or use /settings channel."
+        )
         await random_sleep()
         return
 
     if not tracked_username:
-        logging.warning("No tracked Twitter username configured yet. Set TRACKED_USERNAME or use /settings user.")
+        logging.warning(
+            "No tracked Twitter username configured yet. "
+            "Set TRACKED_USERNAME or use /settings user."
+        )
         await random_sleep()
         return
 
     channel = await resolve_channel(channel_id)
+
     if channel is None:
-        logging.error("Could not resolve Discord channel %s", channel_id)
+        logging.error(
+            "Could not resolve Discord channel %s",
+            channel_id,
+        )
         await random_sleep()
         return
 
     await random_sleep()
 
     try:
-        tweets = await twitter.get_user_tweets(tracked_username, limit=5)
+        tweets = await twitter.get_user_tweets(
+            tracked_username,
+            limit=5,
+        )
+
         if not tweets:
+            logging.info(
+                "No tweets found for @%s",
+                tracked_username,
+            )
             return
 
+        # --------------------------------------------------------------
+        # Collect tweet IDs already posted by this bot.
+        # --------------------------------------------------------------
+
         sent_ids = set()
+
         async for msg in channel.history(limit=300):
             if msg.author == bot.user:
                 parts = msg.content.strip().split("/")
+
                 if parts and parts[-1].isdigit():
                     sent_ids.add(parts[-1])
 
+        # --------------------------------------------------------------
+        # Apply filters.
+        # --------------------------------------------------------------
+
         tweets_to_send = []
+
         for tweet in tweets:
+
             if ignore_replies and is_reply_tweet(tweet):
                 continue
 
             tweet_text = " ".join(
                 [
-                    str(getattr(tweet, "text", "") or ""),
-                    str(getattr(tweet, "full_text", "") or ""),
+                    str(
+                        getattr(tweet, "text", "")
+                        or ""
+                    ),
+                    str(
+                        getattr(tweet, "full_text", "")
+                        or ""
+                    ),
                 ]
             ).strip()
+
             if not keyword_filter_matches(tweet_text):
                 continue
 
-            if hasattr(tweet, "tweets"):
-                for nested_tweet in reversed(tweet.tweets):
-                    if ignore_replies and is_reply_tweet(nested_tweet):
-                        continue
-                    if hasattr(nested_tweet, "id"):
-                        tweet_id = str(nested_tweet.id)
-                        if tweet_id not in sent_ids:
-                            tweets_to_send.append(nested_tweet)
-            elif hasattr(tweet, "id"):
-                tweet_id = str(tweet.id)
-                if tweet_id not in sent_ids:
-                    tweets_to_send.append(tweet)
-            elif hasattr(tweet, "card"):
-                card = tweet.card
-                if hasattr(card, "id"):
-                    tweet_id = str(card.id)
-                    if tweet_id not in sent_ids:
-                        tweets_to_send.append(card)
-            elif hasattr(tweet, "quoted_status"):
-                quoted = tweet.quoted_status
-                if hasattr(quoted, "id"):
-                    tweet_id = str(quoted.id)
-                    if tweet_id not in sent_ids:
-                        tweets_to_send.append(quoted)
+            tweet_id = getattr(tweet, "id", None)
+
+            if tweet_id is None:
+                continue
+
+            tweet_id = str(tweet_id)
+
+            if tweet_id in sent_ids:
+                continue
+
+            tweets_to_send.append(tweet)
+
+        # --------------------------------------------------------------
+        # Send oldest -> newest so multiple missed tweets appear in
+        # chronological order.
+        # --------------------------------------------------------------
 
         for tweet in reversed(tweets_to_send):
-            tweet_url = f"https://fixupx.com/{tweet.author.username}/status/{tweet.id}"
-            await channel.send(tweet_url, silent=silent)
+
+            author = getattr(tweet, "author", None)
+            username = getattr(
+                author,
+                "username",
+                tracked_username,
+            )
+
+            tweet_url = (
+                f"https://fixupx.com/"
+                f"{username}/status/{tweet.id}"
+            )
+
+            await channel.send(
+                tweet_url,
+                silent=silent,
+            )
+
+            logging.info(
+                "Posted tweet %s from @%s",
+                tweet.id,
+                username,
+            )
+
     except Exception as error:
-        logging.error("Error fetching tweets: %s", error)
+        logging.exception(
+            "Error fetching tweets: %s",
+            error,
+        )
 
 
 app = Flask(__name__)
