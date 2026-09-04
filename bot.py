@@ -272,6 +272,61 @@ bot.tree.add_command(keywords_group)
 bot.tree.add_command(settings_group)
 
 
+@bot.tree.command(name="delete", description="Delete the bot's recent messages")
+@app_commands.check(has_manage_guild_or_authorized_user)
+@app_commands.describe(amount="Number of bot messages to delete")
+async def delete_messages(
+    interaction: discord.Interaction,
+    amount: app_commands.Range[int, 1, 100],
+):
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "This command can only be used inside a server.",
+            ephemeral=True,
+        )
+        return
+
+    channel = interaction.channel
+
+    if not isinstance(channel, discord.TextChannel):
+        await interaction.response.send_message(
+            "This command can only be used in a text channel.",
+            ephemeral=True,
+        )
+        return
+
+    bot_member = interaction.guild.me
+
+    if bot_member is None or not channel.permissions_for(bot_member).manage_messages:
+        await interaction.response.send_message(
+            "I need the Manage Messages permission in this channel.",
+            ephemeral=True,
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    deleted = 0
+
+    async for message in channel.history(limit=200):
+        if deleted >= amount:
+            break
+
+        if message.author.id != bot.user.id:
+            continue
+
+        try:
+            await message.delete()
+            deleted += 1
+        except discord.HTTPException:
+            pass
+
+    await interaction.followup.send(
+        f"Deleted {deleted} of my recent messages.",
+        ephemeral=True,
+    )
+
+
 afk_group = afk_manager.create_command_group()
 bot.tree.add_command(afk_group)
 
