@@ -145,7 +145,7 @@ def keyword_filter_matches(tweet_text):
         return True
 
     normalized_text = (tweet_text or "").lower()
-    return any(keyword in normalized_text for keyword in keywords)
+    return not any(keyword in normalized_text for keyword in keywords)
 
 
 def is_reply_tweet(tweet):
@@ -238,7 +238,7 @@ async def settings_view(interaction: discord.Interaction):
 keywords_group = app_commands.Group(name="keywords", description="Manage tweet keyword filtering")
 
 
-@keywords_group.command(name="add", description="Only post tweets containing this word")
+@keywords_group.command(name="add", description="Block tweets containing this word")
 @app_commands.check(has_manage_guild_or_authorized_user)
 async def keywords_add(interaction: discord.Interaction, word: str):
     keyword = word.strip().lower()
