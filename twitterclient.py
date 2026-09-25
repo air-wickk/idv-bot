@@ -261,8 +261,10 @@ class TwitterClient:
                 )
                 continue
 
+            # X can place the details reference much farther into the
+            # serialized tweet object than the usual 15,000 characters.
             tweet_chunk = html[
-                tweet_pos:tweet_pos + 15000
+                tweet_pos:tweet_pos + 100000
             ]
 
             # --------------------------------------------------------
@@ -279,7 +281,7 @@ class TwitterClient:
             # --------------------------------------------------------
 
             details_match = re.search(
-                r'details:\$R\[\d+\]=\{__ref:"([^"]+)"',
+                r'details\s*:\s*\$R\[\d+\]\s*=\s*\{__ref:"([^"]+)"',
                 tweet_chunk,
             )
 
