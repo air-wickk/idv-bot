@@ -229,6 +229,17 @@ class TwitterClient:
             if tweet_id not in timeline_ids:
                 timeline_ids.append(tweet_id)
 
+        # Recent X pages use several TimelineTweet variants instead of the
+        # older TimelineTimelineEntry markers. Their rest_id is the tweet ID;
+        # do not depend on the surrounding field order.
+        if not timeline_ids:
+            for tweet_id in re.findall(
+                r'entry_id:"tweet-(\d{18,20})"',
+                html,
+            ):
+                if tweet_id not in timeline_ids:
+                    timeline_ids.append(tweet_id)
+
         logger.info(
             "X profile @%s has %s timeline entries",
             username,
@@ -253,6 +264,41 @@ class TwitterClient:
             tweet_marker = f'"{tweet_ref}"'
 
             tweet_pos = html.find(tweet_marker)
+            inline_tweet = False
+
+            # Current pages put the tweet details before entry_id and may
+            # include an encoded id without the old Tweet object shape.
+            entry_pos = html.find(
+                f'entry_id:"tweet-{tweet_id}"'
+            )
+
+            if entry_pos != -1:
+                details_pos = html.rfind(
+                    "details:",
+                    0,
+                    entry_pos,
+                )
+
+                if details_pos != -1:
+                    tweet_pos = details_pos
+                    inline_tweet = True
+
+            # Newer pages expose the tweet directly in a TimelineTweet
+            # object and no longer include the encoded Tweet:<id> marker.
+            if tweet_pos == -1:
+                tweet_pos = html.find(
+                    f'rest_id:"{tweet_id}"'
+                )
+
+                if tweet_pos != -1:
+                    tweet_object_pos = html.rfind(
+                        "tweet_results:",
+                        0,
+                        tweet_pos,
+                    )
+
+                    if tweet_object_pos != -1:
+                        tweet_pos = tweet_object_pos
 
             if tweet_pos == -1:
                 logger.warning(
@@ -261,11 +307,22 @@ class TwitterClient:
                 )
                 continue
 
-            # X can place the details reference much farther into the
-            # serialized tweet object than the usual 15,000 characters.
-            tweet_chunk = html[
-                tweet_pos:tweet_pos + 100000
-            ]
+            if inline_tweet:
+                tweet_chunk = html[tweet_pos:tweet_pos + 15000]
+            else:
+                # X can place the details reference much farther into the
+                # serialized tweet object than the usual 15,000 characters.
+                next_tweet_pos = html.find(
+                    "tweet_results:",
+                    tweet_pos + len(tweet_id),
+                )
+
+                if next_tweet_pos == -1:
+                    next_tweet_pos = tweet_pos + 100000
+
+                tweet_chunk = html[
+                    tweet_pos:next_tweet_pos
+                ]
 
             # --------------------------------------------------------
             # Find the details reference.
@@ -280,35 +337,37 @@ class TwitterClient:
             # timeline.
             # --------------------------------------------------------
 
-            details_match = re.search(
-                r'details\s*:\s*\$R\[\d+\]\s*=\s*\{__ref:"([^"]+)"',
-                tweet_chunk,
-            )
+            details_match = None
+
+            if not inline_tweet:
+                details_match = re.search(
+                    r'details\s*:\s*\$R\[\d+\]\s*=\s*\{__ref:"([^"]+)"',
+                    tweet_chunk,
+                )
 
             if not details_match:
-                logger.warning(
-                    "Could not locate details for tweet %s",
-                    tweet_id,
+                # In the current format details is an inline object, so the
+                # tweet chunk itself is already the details source.
+                details_ref = None
+                details_chunk = tweet_chunk
+            else:
+                details_ref = details_match.group(1)
+
+                details_pos = html.find(
+                    f'"{details_ref}"',
+                    tweet_pos,
                 )
-                continue
 
-            details_ref = details_match.group(1)
+                if details_pos == -1:
+                    logger.warning(
+                        "Could not find details object for tweet %s",
+                        tweet_id,
+                    )
+                    continue
 
-            details_pos = html.find(
-                f'"{details_ref}"',
-                tweet_pos,
-            )
-
-            if details_pos == -1:
-                logger.warning(
-                    "Could not find details object for tweet %s",
-                    tweet_id,
-                )
-                continue
-
-            details_chunk = html[
-                details_pos:details_pos + 15000
-            ]
+                details_chunk = html[
+                    details_pos:details_pos + 15000
+                ]
 
             # --------------------------------------------------------
             # Extract tweet text.
