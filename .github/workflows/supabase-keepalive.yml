@@ -1,0 +1,25 @@
+
+name: Supabase Keep Alive
+
+on:
+  schedule:
+    - cron: "17 4 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query Supabase database
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          response=$(curl --silent --show-error --fail-with-body \
+            --request POST \
+            --url "$SUPABASE_URL/rest/v1/rpc/keep_alive" \
+            --header "apikey: $SUPABASE_KEY" \
+            --header "Authorization: Bearer $SUPABASE_KEY" \
+            --header "Content-Type: application/json" \
+            --data '{}')
+          echo "Supabase response: $response"
